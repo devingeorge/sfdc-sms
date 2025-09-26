@@ -347,18 +347,18 @@ app.command('/sms', async ({ ack, body, client, respond }) => {
   }
 });
 
-// Add HTTP endpoints using Bolt's built-in HTTP endpoint feature
+// Add HTTP endpoints using Bolt's receiver routes
 console.log('🔧 Setting up HTTP endpoints...');
-console.log('🔧 App.http before setup:', app.http);
+console.log('🔧 App.receiver.routes exists:', !!app.receiver?.routes);
 
-if (app.http) {
-  console.log('🔧 App.http exists, setting up endpoints...');
+if (app.receiver?.routes) {
+  console.log('🔧 Using app.receiver.routes to setup endpoints...');
   
-  app.http.post('/webhook/sms/sms', async (req, res) => {
+  app.receiver.routes.post('/webhook/sms/sms', async (req, res) => {
     try {
       const { From, To, Body, MessageSid, MessageStatus } = req.body;
       
-      console.log('Received SMS webhook:', { 
+      console.log('📨 Received SMS webhook:', { 
         From, 
         To, 
         Body: Body.substring(0, 50) + (Body.length > 50 ? '...' : ''), 
@@ -373,22 +373,22 @@ if (app.http) {
       const conversation = await database.getOrCreateConversation(From);
       await conversationManager.openConversationAsThread(conversation.id, From, Body, database);
       
+      console.log('✅ SMS processed and conversation thread created');
       res.status(200).send('OK');
     } catch (error) {
-      console.error('Error processing SMS webhook:', error);
+      console.error('❌ Error processing SMS webhook:', error);
       res.status(500).send('Error processing SMS');
     }
   });
 
   // Health check endpoint
-  app.http.get('/webhook/sms/health', async (req, res) => {
+  app.receiver.routes.get('/webhook/sms/health', async (req, res) => {
     res.json({ status: 'ok', message: 'SMS webhook server is running' });
   });
   
-  console.log('✅ HTTP endpoints configured successfully');
+  console.log('✅ HTTP endpoints configured successfully using app.receiver.routes');
 } else {
-  console.log('❌ App.http is undefined, cannot setup HTTP endpoints');
-  console.log('🔧 Available app methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(app)));
+  console.log('❌ App.receiver.routes is undefined, cannot setup HTTP endpoints');
 }
 
 // Start the app
