@@ -9,13 +9,29 @@ class Database {
 
   init() {
     return new Promise((resolve, reject) => {
-      const dbPath = path.join(__dirname, '..', 'data', 'conversations.db');
+      // Use in-memory database for cloud deployments (Render, Heroku, etc.)
+      const isCloudDeployment = process.env.NODE_ENV === 'production' || 
+                                process.env.RENDER || 
+                                process.env.HEROKU || 
+                                process.env.VERCEL;
+      
+      let dbPath;
+      if (isCloudDeployment) {
+        // Use in-memory database for cloud deployments
+        dbPath = ':memory:';
+        console.log('🌩️ Using in-memory database for cloud deployment');
+      } else {
+        // Use file-based database for local development
+        dbPath = path.join(__dirname, '..', 'data', 'conversations.db');
+        console.log('💾 Using file-based database for local development');
+      }
+      
       this.db = new sqlite3.Database(dbPath, (err) => {
         if (err) {
           console.error('Error opening database:', err);
           reject(err);
         } else {
-          console.log('Connected to SQLite database');
+          console.log('✅ Connected to SQLite database');
           this.createTables().then(resolve).catch(reject);
         }
       });
