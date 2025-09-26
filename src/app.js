@@ -1,6 +1,5 @@
 const { App } = require('@slack/bolt');
 const express = require('express');
-const bodyParser = require('body-parser');
 require('dotenv').config();
 
 const Database = require('./database');
@@ -38,9 +37,8 @@ try {
 const salesforceHandler = new SalesforceHandler();
 const conversationManager = new ConversationManager(app.client);
 
-// Middleware
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Note: Slack Bolt handles request parsing automatically
+// No need for body-parser middleware as it conflicts with Bolt's built-in handling
 
 // Initialize database and load conversation threads
 (async () => {
