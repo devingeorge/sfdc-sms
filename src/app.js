@@ -333,16 +333,16 @@ app.command('/sms', async ({ ack, body, client, respond }) => {
   }
 });
 
-// Webhook endpoint for receiving SMS
-// Use the Express receiver to handle custom routes
-app.receiver.router.use('/webhook/sms', routes.smsWebhook);
-
 // Start the app
 (async () => {
   try {
     await app.start();
     console.log('⚡️ Slack SMS Salesforce app is running!');
     console.log('💬 Hybrid mode: Direct thread replies + Quick Reply buttons');
+    
+    // Setup webhook routes after app starts
+    app.receiver.router.use('/webhook/sms', routes.smsWebhook);
+    console.log('✅ SMS webhook routes configured');
   } catch (error) {
     console.error('Failed to start app:', error);
     process.exit(1);
