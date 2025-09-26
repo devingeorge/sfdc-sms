@@ -67,10 +67,24 @@ class Database {
         )
       `;
 
-      this.db.serialize(() => {
-        this.db.run(createConversationsTable);
-        this.db.run(createMessagesTable);
-        resolve();
+      // Create tables sequentially to ensure they're ready
+      this.db.run(createConversationsTable, (err) => {
+        if (err) {
+          console.error('Error creating conversations table:', err);
+          reject(err);
+          return;
+        }
+        console.log('✅ Conversations table created');
+        
+        this.db.run(createMessagesTable, (err) => {
+          if (err) {
+            console.error('Error creating messages table:', err);
+            reject(err);
+            return;
+          }
+          console.log('✅ Messages table created');
+          resolve();
+        });
       });
     });
   }
