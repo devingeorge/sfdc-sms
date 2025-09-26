@@ -34,8 +34,7 @@
         "im:history",
         "im:read",
         "im:write",
-        "users:read",
-        "app_mentions:write"
+        "users:read"
       ]
     }
   },
