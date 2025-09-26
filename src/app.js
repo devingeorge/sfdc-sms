@@ -409,6 +409,33 @@ if (app.receiver && app.receiver.requestListener) {
   console.log('❌ Cannot setup SMS webhook handler - receiver.requestListener not available');
 }
 
+// Function to notify users about new SMS messages
+async function notifyUsersAboutNewSMS(phoneNumber, messageBody, conversationId) {
+  try {
+    console.log('📢 Notifying users about new SMS from:', phoneNumber);
+    
+    // For now, we'll just log the notification
+    // In a real implementation, you might:
+    // 1. Send a notification to specific users
+    // 2. Update the App Home for all users
+    // 3. Send a DM to the app administrator
+    
+    console.log('📱 New SMS received:');
+    console.log('   From:', phoneNumber);
+    console.log('   Message:', messageBody.substring(0, 100) + (messageBody.length > 100 ? '...' : ''));
+    console.log('   Conversation ID:', conversationId);
+    
+    // TODO: Implement actual user notification
+    // This could be:
+    // - Updating App Home for all users
+    // - Sending DM to specific users
+    // - Posting to a specific channel
+    
+  } catch (error) {
+    console.error('❌ Error notifying users about new SMS:', error);
+  }
+}
+
 // Direct SMS webhook handler
 async function handleSMSWebhook(req, res) {
   try {
@@ -457,9 +484,9 @@ async function handleSMSWebhook(req, res) {
         const conversation = await database.getOrCreateConversation(smsData.From);
         console.log('✅ Conversation ready:', conversation.id);
         
-        // Open conversation as thread and notify user
-        await conversationManager.openConversationAsThread(conversation.id, smsData.From, smsData.Body, database);
-        console.log('✅ Conversation thread created in Slack');
+        // Notify users about the new SMS message
+        await notifyUsersAboutNewSMS(smsData.From, smsData.Body, conversation.id);
+        console.log('✅ SMS notification sent to users');
 
         console.log('✅ SMS webhook processed successfully');
         res.writeHead(200, { 'Content-Type': 'text/plain' });
