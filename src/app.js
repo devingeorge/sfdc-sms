@@ -262,7 +262,7 @@ app.event('app_home_opened', async ({ event, client }) => {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*${conv.phoneNumber}*\nLast message: ${lastMessage.content}\n_${timeAgo}_ • ${messageCount} messages`
+            text: `*${conv.phone_number}*\nLast message: ${lastMessage.content}\n_${timeAgo}_ • ${messageCount} messages`
           },
           accessory: {
             type: 'button',
@@ -346,13 +346,13 @@ app.action('open_conversation', async ({ ack, body, client }) => {
     // Post the conversation starter message
     const threadMessage = await client.chat.postMessage({
       channel: dmChannel.channel.id,
-      text: `📱 *SMS Conversation with ${conversation.phoneNumber}*`,
+      text: `📱 *SMS Conversation with ${conversation.phone_number}*`,
       blocks: [
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `📱 *SMS Conversation with ${conversation.phoneNumber}*\n\n*Your SMS Number:* ${userPhoneNumber.phone_number}\n\n*Recent Messages:*`
+            text: `📱 *SMS Conversation with ${conversation.phone_number}*\n\n*Your SMS Number:* ${userPhoneNumber.phone_number}\n\n*Recent Messages:*`
           }
         }
       ]
@@ -364,7 +364,7 @@ app.action('open_conversation', async ({ ack, body, client }) => {
       await client.chat.postMessage({
         channel: dmChannel.channel.id,
         thread_ts: threadMessage.ts,
-        text: `${message.direction === 'incoming' ? '📨' : '📤'} *${message.direction === 'incoming' ? 'From' : 'To'} ${conversation.phoneNumber}:* ${message.content}`,
+        text: `${message.direction === 'incoming' ? '📨' : '📤'} *${message.direction === 'incoming' ? 'From' : 'To'} ${conversation.phone_number}:* ${message.content}`,
         reply_broadcast: false
       });
     }
@@ -403,7 +403,7 @@ app.action('open_conversation', async ({ ack, body, client }) => {
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
-      text: `✅ Conversation opened! Check your DMs with the bot to continue the SMS conversation with ${conversation.phoneNumber}.`
+      text: `✅ Conversation opened! Check your DMs with the bot to continue the SMS conversation with ${conversation.phone_number}.`
     });
   } catch (error) {
     console.error('Error opening conversation:', error);
@@ -622,7 +622,7 @@ app.message(async ({ message, client }) => {
       return;
     }
     
-    console.log('🔍 Found conversation:', conversation.phoneNumber);
+    console.log('🔍 Found conversation:', conversation.phone_number);
     
     // Get user's phone number
     const userPhoneNumber = await database.getUserPhoneNumber(message.user);
@@ -638,17 +638,17 @@ app.message(async ({ message, client }) => {
     }
     
     console.log('🔍 User phone number:', userPhoneNumber.phone_number);
-    console.log('🔍 Sending SMS to:', conversation.phoneNumber);
+    console.log('🔍 Sending SMS to:', conversation.phone_number);
     console.log('🔍 SMS message:', message.text);
     
     // Send SMS reply using the user's phone number
-    const result = await smsHandler.sendSMS(conversation.phoneNumber, message.text, userPhoneNumber.phone_number);
+    const result = await smsHandler.sendSMS(conversation.phone_number, message.text, userPhoneNumber.phone_number);
     
     console.log('🔍 SMS send result:', result);
     
     if (result.success) {
       // Store the outgoing message
-      await database.addMessage(conversation.phoneNumber, message.text, 'outgoing', result.messageId, message.ts);
+      await database.addMessage(conversation.phone_number, message.text, 'outgoing', result.messageId, message.ts);
       
       // Update the conversation thread with the sent message
       await conversationManager.updateConversationDisplay(conversationId, conversation);
@@ -657,7 +657,7 @@ app.message(async ({ message, client }) => {
       await client.chat.postMessage({
         channel: message.channel,
         thread_ts: message.thread_ts,
-        text: `✅ SMS sent to ${conversation.phoneNumber} from ${userPhoneNumber.phone_number}`,
+        text: `✅ SMS sent to ${conversation.phone_number} from ${userPhoneNumber.phone_number}`,
         reply_broadcast: false
       });
     } else {
