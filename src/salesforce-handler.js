@@ -98,13 +98,13 @@ class SalesforceHandler {
 
       // Create a Task (Activity) in Salesforce instead of a Case
       const taskData = {
-        Subject: `SMS Conversation with ${conversation.phone_number}`,
+        Subject: 'Call', // Always set to "Call" as requested for testing
         Description: this.formatConversationForSalesforce(conversation, messages),
         Status: 'Completed', // SMS conversation is already completed
         Priority: 'Normal',
         ActivityDate: new Date().toISOString().split('T')[0], // Today's date
         Type: 'SMS',
-        Phone: conversation.phone_number,
+        // Phone field removed - doesn't exist on Task object
         // Add custom fields if they exist in your org
         // Custom_Field__c: 'Custom Value'
       };
