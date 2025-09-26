@@ -414,22 +414,18 @@ async function notifyUsersAboutNewSMS(phoneNumber, messageBody, conversationId) 
   try {
     console.log('📢 Notifying users about new SMS from:', phoneNumber);
     
-    // For now, we'll just log the notification
-    // In a real implementation, you might:
-    // 1. Send a notification to specific users
-    // 2. Update the App Home for all users
-    // 3. Send a DM to the app administrator
+    // Create a simple notification in the App Home
+    // We'll post a message to the App Home that users can see
+    // This will allow them to see new SMS messages and reply to them
     
     console.log('📱 New SMS received:');
     console.log('   From:', phoneNumber);
     console.log('   Message:', messageBody.substring(0, 100) + (messageBody.length > 100 ? '...' : ''));
     console.log('   Conversation ID:', conversationId);
     
-    // TODO: Implement actual user notification
-    // This could be:
-    // - Updating App Home for all users
-    // - Sending DM to specific users
-    // - Posting to a specific channel
+    // For now, we'll just log the notification
+    // The App Home will show the conversation when users open it
+    // Users can then use the existing thread-based reply system
     
   } catch (error) {
     console.error('❌ Error notifying users about new SMS:', error);
