@@ -29,9 +29,6 @@ try {
 // Initialize Salesforce handler
 const salesforceHandler = new SalesforceHandler();
 
-// Initialize conversation manager
-const conversationManager = new ConversationManager();
-
 console.log('🔧 Initializing Slack Bolt app...');
 console.log('🔧 Environment variables check:');
 console.log('  - SLACK_BOT_TOKEN:', process.env.SLACK_BOT_TOKEN ? '✅ Set' : '❌ Missing');
@@ -46,6 +43,9 @@ const app = new App({
 });
 
 console.log('🔧 Slack Bolt app created successfully');
+
+// Initialize conversation manager with the Slack client
+const conversationManager = new ConversationManager(app.client);
 
 // Handle SMS webhooks directly in the requestListener
 if (app.receiver && app.receiver.requestListener) {
@@ -574,17 +574,35 @@ app.message(async ({ message, client }) => {
   // Skip bot messages
   if (message.bot_id) return;
   
+  console.log('🔍 Thread message received:', {
+    channel: message.channel,
+    thread_ts: message.thread_ts,
+    user: message.user,
+    text: message.text
+  });
+  
   // Check if this thread represents a conversation
   const conversationId = await conversationManager.getConversationIdFromThread(message.channel, message.thread_ts);
-  if (!conversationId) return;
+  console.log('🔍 Conversation ID from thread:', conversationId);
+  
+  if (!conversationId) {
+    console.log('❌ No conversation found for this thread');
+    return;
+  }
   
   try {
     const conversation = await database.getConversation(conversationId);
-    if (!conversation) return;
+    if (!conversation) {
+      console.log('❌ Conversation not found in database:', conversationId);
+      return;
+    }
+    
+    console.log('🔍 Found conversation:', conversation.phoneNumber);
     
     // Get user's phone number
     const userPhoneNumber = await database.getUserPhoneNumber(message.user);
     if (!userPhoneNumber) {
+      console.log('❌ User phone number not set for user:', message.user);
       await client.chat.postMessage({
         channel: message.channel,
         thread_ts: message.thread_ts,
@@ -594,8 +612,14 @@ app.message(async ({ message, client }) => {
       return;
     }
     
+    console.log('🔍 User phone number:', userPhoneNumber.phone_number);
+    console.log('🔍 Sending SMS to:', conversation.phoneNumber);
+    console.log('🔍 SMS message:', message.text);
+    
     // Send SMS reply using the user's phone number
     const result = await smsHandler.sendSMS(conversation.phoneNumber, message.text, userPhoneNumber.phone_number);
+    
+    console.log('🔍 SMS send result:', result);
     
     if (result.success) {
       // Store the outgoing message
