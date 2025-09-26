@@ -614,7 +614,9 @@ app.message(async ({ message, client }) => {
   }
   
   try {
+    console.log('🔍 Looking up conversation with ID:', conversationId);
     const conversation = await database.getConversation(conversationId);
+    console.log('🔍 Database returned conversation:', conversation);
     if (!conversation) {
       console.log('❌ Conversation not found in database:', conversationId);
       return;
