@@ -420,7 +420,7 @@ app.action('set_phone_number', async ({ ack, body, client }) => {
         callback_id: 'phone_number_modal',
         title: {
           type: 'plain_text',
-          text: 'Set Your SMS Phone Number'
+          text: 'Set Phone Number'
         },
         submit: {
           type: 'plain_text',
