@@ -601,7 +601,7 @@ app.action('log_to_salesforce', async ({ ack, body, client }) => {
     const messages = await database.getConversationMessages(conversationId);
     
     // Create Salesforce case
-    const caseResult = await salesforceHandler.logConversationAsTask(conversation, messages);
+    const caseResult = await salesforceHandler.logConversationAsCase(conversation, messages);
     
     if (caseResult.success) {
       // Mark conversation as logged
