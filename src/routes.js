@@ -7,6 +7,17 @@ const ConversationManager = require('./conversation-manager');
 const router = express.Router();
 const database = new Database();
 
+// Initialize database
+database.init().catch(error => {
+  console.error('❌ Failed to initialize database in routes:', error);
+});
+
+// Test endpoint to verify routes are working
+router.get('/test', (req, res) => {
+  console.log('🧪 Test endpoint called');
+  res.json({ status: 'ok', message: 'SMS webhook routes are working!' });
+});
+
 // Initialize SMS handler (use mock if Twilio credentials not available)
 let smsHandler;
 try {
@@ -27,6 +38,7 @@ router.post('/sms', async (req, res) => {
     console.log('📨 Request body:', req.body);
     console.log('📨 Request method:', req.method);
     console.log('📨 Request URL:', req.url);
+    console.log('📨 Database initialized:', database.db ? 'Yes' : 'No');
     
     const { From, To, Body, MessageSid, MessageStatus } = req.body;
     

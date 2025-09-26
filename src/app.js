@@ -393,10 +393,25 @@ if (app.receiver && app.receiver.requestListener) {
     // Check if this is one of our webhook routes
     if (req.url.startsWith('/webhook/sms/')) {
       console.log('🔧 Handling SMS webhook route:', req.url);
+      
+      // Add a flag to track if we handled the request
+      let handled = false;
+      
+      // Override res.end to track when response is sent
+      const originalEnd = res.end;
+      res.end = function(...args) {
+        handled = true;
+        console.log('✅ SMS webhook response sent');
+        return originalEnd.apply(this, args);
+      };
+      
       // Use the routes from routes.js
       routes.smsWebhook(req, res, () => {
         // If our routes don't handle it, call the original listener
-        originalRequestListener(req, res);
+        if (!handled) {
+          console.log('🔧 SMS route did not handle request, falling back to original listener');
+          originalRequestListener(req, res);
+        }
       });
     } else {
       // For all other requests, use the original listener
