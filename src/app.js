@@ -393,6 +393,13 @@ app.action('open_conversation', async ({ ack, body, client }) => {
     // Store thread mapping in conversation manager
     conversationManager.threadConversations.set(`${dmChannel.channel.id}:${threadMessage.ts}`, conversationId);
 
+    console.log('🔍 Thread created and mapped:', {
+      conversationId: conversationId,
+      channel: dmChannel.channel.id,
+      thread_ts: threadMessage.ts,
+      mapping: `${dmChannel.channel.id}:${threadMessage.ts}`
+    });
+
     await client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
@@ -566,13 +573,29 @@ app.action('quick_reply', async ({ ack, body, client }) => {
   }
 });
 
-// Handle thread messages for SMS replies
+// Handle ALL messages (for debugging)
 app.message(async ({ message, client }) => {
+  console.log('🔍 ALL MESSAGE RECEIVED:', {
+    channel: message.channel,
+    thread_ts: message.thread_ts,
+    user: message.user,
+    bot_id: message.bot_id,
+    text: message.text,
+    is_thread: !!message.thread_ts,
+    is_bot: !!message.bot_id
+  });
+  
   // Only handle messages in threads
-  if (!message.thread_ts) return;
+  if (!message.thread_ts) {
+    console.log('❌ Message not in thread, ignoring');
+    return;
+  }
   
   // Skip bot messages
-  if (message.bot_id) return;
+  if (message.bot_id) {
+    console.log('❌ Bot message, ignoring');
+    return;
+  }
   
   console.log('🔍 Thread message received:', {
     channel: message.channel,
