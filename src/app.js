@@ -10,12 +10,26 @@ const ConversationManager = require('./conversation-manager');
 const routes = require('./routes');
 
 // Initialize Slack app
+console.log('🔧 Initializing Slack Bolt app...');
+console.log('🔧 Environment variables check:');
+console.log('  - SLACK_BOT_TOKEN:', process.env.SLACK_BOT_TOKEN ? '✅ Set' : '❌ Missing');
+console.log('  - SLACK_SIGNING_SECRET:', process.env.SLACK_SIGNING_SECRET ? '✅ Set' : '❌ Missing');
+console.log('  - PORT:', process.env.PORT || 3000);
+
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
   signingSecret: process.env.SLACK_SIGNING_SECRET,
   socketMode: false,
   port: process.env.PORT || 3000
 });
+
+console.log('🔧 Slack Bolt app created successfully');
+console.log('🔧 App object keys:', Object.keys(app));
+console.log('🔧 App.http exists:', !!app.http);
+console.log('🔧 App.receiver exists:', !!app.receiver);
+if (app.receiver) {
+  console.log('🔧 App.receiver keys:', Object.keys(app.receiver));
+}
 
 // Initialize handlers
 const database = new Database();
@@ -334,36 +348,48 @@ app.command('/sms', async ({ ack, body, client, respond }) => {
 });
 
 // Add HTTP endpoints using Bolt's built-in HTTP endpoint feature
-app.http.post('/webhook/sms/sms', async (req, res) => {
-  try {
-    const { From, To, Body, MessageSid, MessageStatus } = req.body;
-    
-    console.log('Received SMS webhook:', { 
-      From, 
-      To, 
-      Body: Body.substring(0, 50) + (Body.length > 50 ? '...' : ''), 
-      MessageSid,
-      MessageStatus 
-    });
+console.log('🔧 Setting up HTTP endpoints...');
+console.log('🔧 App.http before setup:', app.http);
 
-    // Store the incoming SMS in the database
-    await database.addMessage(From, Body, 'incoming', MessageSid);
-    
-    // Open conversation as thread and notify user
-    const conversation = await database.getOrCreateConversation(From);
-    await conversationManager.openConversationAsThread(conversation.id, From, Body, database);
-    
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error('Error processing SMS webhook:', error);
-    res.status(500).send('Error processing SMS');
-  }
-});
+if (app.http) {
+  console.log('🔧 App.http exists, setting up endpoints...');
+  
+  app.http.post('/webhook/sms/sms', async (req, res) => {
+    try {
+      const { From, To, Body, MessageSid, MessageStatus } = req.body;
+      
+      console.log('Received SMS webhook:', { 
+        From, 
+        To, 
+        Body: Body.substring(0, 50) + (Body.length > 50 ? '...' : ''), 
+        MessageSid,
+        MessageStatus 
+      });
 
-// Health check endpoint
-app.http.get('/webhook/sms/health', async (req, res) => {
-  res.json({ status: 'ok', message: 'SMS webhook server is running' });
-});
+      // Store the incoming SMS in the database
+      await database.addMessage(From, Body, 'incoming', MessageSid);
+      
+      // Open conversation as thread and notify user
+      const conversation = await database.getOrCreateConversation(From);
+      await conversationManager.openConversationAsThread(conversation.id, From, Body, database);
+      
+      res.status(200).send('OK');
+    } catch (error) {
+      console.error('Error processing SMS webhook:', error);
+      res.status(500).send('Error processing SMS');
+    }
+  });
+
+  // Health check endpoint
+  app.http.get('/webhook/sms/health', async (req, res) => {
+    res.json({ status: 'ok', message: 'SMS webhook server is running' });
+  });
+  
+  console.log('✅ HTTP endpoints configured successfully');
+} else {
+  console.log('❌ App.http is undefined, cannot setup HTTP endpoints');
+  console.log('🔧 Available app methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(app)));
+}
 
 // Start the app
 (async () => {
