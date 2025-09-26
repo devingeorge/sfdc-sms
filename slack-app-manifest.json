@@ -42,7 +42,7 @@
     "event_subscriptions": {
       "bot_events": [
         "app_home_opened",
-        "message.im"
+        "message.channels"
       ]
     },
     "interactivity": {
