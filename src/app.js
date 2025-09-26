@@ -333,16 +333,45 @@ app.command('/sms', async ({ ack, body, client, respond }) => {
   }
 });
 
+// Add webhook endpoints directly to the Bolt app
+app.receiver.router.post('/webhook/sms/sms', async (req, res) => {
+  try {
+    const { From, To, Body, MessageSid, MessageStatus } = req.body;
+    
+    console.log('Received SMS webhook:', { 
+      From, 
+      To, 
+      Body: Body.substring(0, 50) + (Body.length > 50 ? '...' : ''), 
+      MessageSid,
+      MessageStatus 
+    });
+
+    // Store the incoming SMS in the database
+    await database.addMessage(From, Body, 'incoming', MessageSid);
+    
+    // Open conversation as thread and notify user
+    const conversation = await database.getOrCreateConversation(From);
+    await conversationManager.openConversationAsThread(conversation.id, From, Body, database);
+    
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Error processing SMS webhook:', error);
+    res.status(500).send('Error processing SMS');
+  }
+});
+
+// Health check endpoint
+app.receiver.router.get('/webhook/sms/health', (req, res) => {
+  res.json({ status: 'ok', message: 'SMS webhook server is running' });
+});
+
 // Start the app
 (async () => {
   try {
     await app.start();
     console.log('⚡️ Slack SMS Salesforce app is running!');
     console.log('💬 Hybrid mode: Direct thread replies + Quick Reply buttons');
-    
-    // Setup webhook routes after app starts
-    app.receiver.router.use('/webhook/sms', routes.smsWebhook);
-    console.log('✅ SMS webhook routes configured');
+    console.log('✅ SMS webhook endpoints configured');
   } catch (error) {
     console.error('Failed to start app:', error);
     process.exit(1);
