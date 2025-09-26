@@ -373,17 +373,41 @@ if (app.receiver?.routes) {
   console.log('❌ App.receiver.routes is undefined, cannot setup HTTP endpoints');
 }
 
-// Add catch-all handler to see what requests are coming in
-app.receiver.router.use('*', (req, res, next) => {
-  console.log('🔍 Incoming request:', {
-    method: req.method,
-    url: req.url,
-    path: req.path,
-    headers: req.headers,
-    body: req.body
-  });
-  next();
-});
+// Use the existing routes from routes.js
+// Since app.receiver.routes is not a router, we need to use a different approach
+// Let's try using the receiver's requestListener to handle our routes
+if (app.receiver && app.receiver.requestListener) {
+  console.log('🔧 Setting up routes using receiver.requestListener...');
+  
+  // Store the original requestListener
+  const originalRequestListener = app.receiver.requestListener;
+  
+  // Override the requestListener to handle our routes
+  app.receiver.requestListener = (req, res) => {
+    console.log('🔍 Incoming request:', {
+      method: req.method,
+      url: req.url,
+      path: req.path
+    });
+    
+    // Check if this is one of our webhook routes
+    if (req.url.startsWith('/webhook/sms/')) {
+      console.log('🔧 Handling SMS webhook route:', req.url);
+      // Use the routes from routes.js
+      routes.smsWebhook(req, res, () => {
+        // If our routes don't handle it, call the original listener
+        originalRequestListener(req, res);
+      });
+    } else {
+      // For all other requests, use the original listener
+      originalRequestListener(req, res);
+    }
+  };
+  
+  console.log('✅ Routes configured using receiver.requestListener');
+} else {
+  console.log('❌ Cannot setup routes - receiver.requestListener not available');
+}
 
 // Start the app
 (async () => {
