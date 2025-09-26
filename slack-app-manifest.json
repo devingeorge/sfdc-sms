@@ -1,0 +1,55 @@
+{
+  "display_information": {
+    "name": "SMS Salesforce Integration",
+    "description": "Send and receive SMS messages with Salesforce logging",
+    "background_color": "#2c2d30",
+    "long_description": "A powerful Slack app that enables SMS communication with customers and Salesforce logging. Features include: Send and receive SMS messages via Twilio, Organized conversation threads for each phone number, Direct thread replies (no slash commands needed), Quick Reply buttons for longer messages, One-click Salesforce logging as Cases, Real-time conversation synchronization"
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": true,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    },
+    "bot_user": {
+      "display_name": "SMS Salesforce Bot",
+      "always_online": true
+    },
+    "slash_commands": [
+      {
+        "command": "/sms",
+        "description": "Send SMS message",
+        "usage_hint": "<phone_number> <message>",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "app_mentions:read",
+        "channels:history",
+        "chat:write",
+        "commands",
+        "im:history",
+        "im:read",
+        "im:write",
+        "users:read",
+        "app_mentions:write"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "bot_events": [
+        "app_home_opened"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
