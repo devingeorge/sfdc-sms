@@ -46,61 +46,6 @@ const app = new App({
 });
 
 console.log('🔧 Slack Bolt app created successfully');
-console.log('🔧 App object keys:', Object.keys(app));
-console.log('🔧 App.http exists:', !!app.http);
-console.log('🔧 App.receiver exists:', !!app.receiver);
-if (app.receiver) {
-  console.log('🔧 App.receiver keys:', Object.keys(app.receiver));
-  console.log('🔧 App.receiver.routes exists:', !!app.receiver?.routes);
-  console.log('🔧 App.receiver.routes type:', typeof app.receiver?.routes);
-  console.log('🔧 App.receiver.routes value:', app.receiver?.routes);
-  if (app.receiver?.routes) {
-    console.log('🔧 App.receiver.routes keys:', Object.keys(app.receiver.routes));
-    console.log('🔧 App.receiver.routes methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(app.receiver.routes)));
-  }
-}
-
-// Add HTTP endpoints using Bolt's receiver routes
-console.log('🔧 Setting up HTTP endpoints...');
-if (app.receiver?.routes) {
-  console.log('🔧 Using app.receiver.routes to setup endpoints...');
-  
-  app.receiver.routes.post('/webhook/sms/sms', async (req, res) => {
-    try {
-      const { From, To, Body, MessageSid, MessageStatus } = req.body;
-      
-      console.log('📨 Received SMS webhook:', { 
-        From, 
-        To, 
-        Body: Body.substring(0, 50) + (Body.length > 50 ? '...' : ''), 
-        MessageSid,
-        MessageStatus 
-      });
-
-      // Store the incoming SMS in the database
-      await database.addMessage(From, Body, 'incoming', MessageSid);
-      
-      // Open conversation as thread and notify user
-      const conversation = await database.getOrCreateConversation(From);
-      await conversationManager.openConversationAsThread(conversation.id, From, Body, database);
-      
-      console.log('✅ SMS processed and conversation thread created');
-      res.status(200).send('OK');
-    } catch (error) {
-      console.error('❌ Error processing SMS webhook:', error);
-      res.status(500).send('Error processing SMS');
-    }
-  });
-
-  // Health check endpoint
-  app.receiver.routes.get('/webhook/sms/health', async (req, res) => {
-    res.json({ status: 'ok', message: 'SMS webhook server is running' });
-  });
-  
-  console.log('✅ HTTP endpoints configured successfully using app.receiver.routes');
-} else {
-  console.log('❌ App.receiver.routes is undefined, cannot setup HTTP endpoints');
-}
 
 // Handle SMS webhooks directly in the requestListener
 if (app.receiver && app.receiver.requestListener) {
