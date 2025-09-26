@@ -88,18 +88,34 @@ async function notifyUsersAboutNewSMS(phoneNumber, messageBody, conversationId) 
   try {
     console.log('📢 Notifying users about new SMS from:', phoneNumber);
     
-    // Create a simple notification in the App Home
-    // We'll post a message to the App Home that users can see
-    // This will allow them to see new SMS messages and reply to them
+    // Get the conversation to check if there's an existing thread
+    const conversation = await database.getConversation(conversationId);
     
     console.log('📱 New SMS received:');
     console.log('   From:', phoneNumber);
     console.log('   Message:', messageBody.substring(0, 100) + (messageBody.length > 100 ? '...' : ''));
     console.log('   Conversation ID:', conversationId);
     
-    // For now, we'll just log the notification
-    // The App Home will show the conversation when users open it
-    // Users can then use the existing thread-based reply system
+    // If there's an existing thread, update it with the new message
+    if (conversation && conversation.slack_channel_id && conversation.slack_thread_ts) {
+      console.log('🔍 Found existing thread, updating with new SMS message');
+      
+      try {
+        // Post the new incoming message to the existing thread
+        await app.client.chat.postMessage({
+          channel: conversation.slack_channel_id,
+          thread_ts: conversation.slack_thread_ts,
+          text: `📨 *New SMS from ${phoneNumber}:* ${messageBody}`,
+          reply_broadcast: false
+        });
+        
+        console.log('✅ New SMS message posted to existing thread');
+      } catch (error) {
+        console.error('❌ Error posting to existing thread:', error);
+      }
+    } else {
+      console.log('📋 No existing thread found, SMS will appear when user opens conversation');
+    }
     
   } catch (error) {
     console.error('❌ Error notifying users about new SMS:', error);
@@ -338,29 +354,94 @@ app.action('open_conversation', async ({ ack, body, client }) => {
       return;
     }
 
-    // Create a simple thread in the user's DM with the bot
-    const dmChannel = await client.conversations.open({
-      users: body.user.id
-    });
-
-    // Post the conversation starter message
-    const threadMessage = await client.chat.postMessage({
-      channel: dmChannel.channel.id,
-      text: `📱 *SMS Conversation with ${conversation.phone_number}*`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `📱 *SMS Conversation with ${conversation.phone_number}*\n\n*Your SMS Number:* ${userPhoneNumber.phone_number}\n\n*Recent Messages:*`
-          }
+    // Check if a thread already exists for this conversation
+    let threadMessage;
+    let dmChannel;
+    
+    if (conversation.slack_channel_id && conversation.slack_thread_ts) {
+      // Thread already exists, reuse it
+      console.log('🔍 Reusing existing thread for conversation:', conversationId);
+      
+      dmChannel = { channel: { id: conversation.slack_channel_id } };
+      
+      // Get the existing thread message to update it
+      try {
+        const threadHistory = await client.conversations.replies({
+          channel: conversation.slack_channel_id,
+          ts: conversation.slack_thread_ts,
+          limit: 1
+        });
+        
+        if (threadHistory.messages && threadHistory.messages.length > 0) {
+          threadMessage = { ts: conversation.slack_thread_ts };
+          console.log('✅ Found existing thread message');
+        } else {
+          throw new Error('Thread message not found');
         }
-      ]
-    });
+      } catch (error) {
+        console.log('❌ Could not find existing thread, creating new one');
+        threadMessage = null;
+      }
+    }
+    
+    if (!threadMessage) {
+      // Create a new thread
+      console.log('🔍 Creating new thread for conversation:', conversationId);
+      
+      dmChannel = await client.conversations.open({
+        users: body.user.id
+      });
 
-    // Add recent messages to the thread
+      // Post the conversation starter message
+      threadMessage = await client.chat.postMessage({
+        channel: dmChannel.channel.id,
+        text: `📱 *SMS Conversation with ${conversation.phone_number}*`,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `📱 *SMS Conversation with ${conversation.phone_number}*\n\n*Your SMS Number:* ${userPhoneNumber.phone_number}\n\n*Recent Messages:*`
+            }
+          }
+        ]
+      });
+
+      // Store thread info in database
+      await database.updateConversationSlackInfo(conversationId, dmChannel.channel.id, threadMessage.ts);
+      
+      // Store thread mapping in conversation manager
+      conversationManager.threadConversations.set(`${dmChannel.channel.id}:${threadMessage.ts}`, conversationId);
+
+      console.log('🔍 New thread created and mapped:', {
+        conversationId: conversationId,
+        channel: dmChannel.channel.id,
+        thread_ts: threadMessage.ts,
+        mapping: `${dmChannel.channel.id}:${threadMessage.ts}`
+      });
+    } else {
+      // Update existing thread mapping
+      conversationManager.threadConversations.set(`${dmChannel.channel.id}:${threadMessage.ts}`, conversationId);
+      console.log('🔍 Updated existing thread mapping:', {
+        conversationId: conversationId,
+        channel: dmChannel.channel.id,
+        thread_ts: threadMessage.ts
+      });
+    }
+
+    // Add recent messages to the thread (only if it's a new thread or we want to refresh)
     const messages = await database.getConversationMessages(conversationId);
-    for (const message of messages.slice(-5)) { // Show last 5 messages
+    const recentMessages = messages.slice(-5); // Show last 5 messages
+    
+    // Add a separator and recent messages
+    await client.chat.postMessage({
+      channel: dmChannel.channel.id,
+      thread_ts: threadMessage.ts,
+      text: `📋 *Recent Messages (${recentMessages.length}):*`,
+      reply_broadcast: false
+    });
+    
+    for (const message of recentMessages) {
       await client.chat.postMessage({
         channel: dmChannel.channel.id,
         thread_ts: threadMessage.ts,
@@ -385,19 +466,6 @@ app.action('open_conversation', async ({ ack, body, client }) => {
           ]
         }
       ]
-    });
-
-    // Store thread info in database
-    await database.updateConversationSlackInfo(conversationId, dmChannel.channel.id, threadMessage.ts);
-    
-    // Store thread mapping in conversation manager
-    conversationManager.threadConversations.set(`${dmChannel.channel.id}:${threadMessage.ts}`, conversationId);
-
-    console.log('🔍 Thread created and mapped:', {
-      conversationId: conversationId,
-      channel: dmChannel.channel.id,
-      thread_ts: threadMessage.ts,
-      mapping: `${dmChannel.channel.id}:${threadMessage.ts}`
     });
 
     await client.chat.postEphemeral({
