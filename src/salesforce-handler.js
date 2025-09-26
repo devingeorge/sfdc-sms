@@ -83,7 +83,8 @@ class SalesforceHandler {
     }
   }
 
-  async logConversation(conversation) {
+  // Main method to log conversation as a Task (Activity) - called by app.js
+  async logConversationAsCase(conversation, messages) {
     try {
       if (!this.isAuthenticated) {
         const authSuccess = await this.authenticate();
@@ -95,32 +96,32 @@ class SalesforceHandler {
         }
       }
 
-      // Create a Case in Salesforce
-      const caseData = {
-        Subject: `SMS Conversation with ${conversation.phoneNumber}`,
-        Description: this.formatConversationForSalesforce(conversation),
-        Status: 'New',
-        Origin: 'SMS',
-        Priority: 'Medium',
-        Type: 'Question',
-        Phone: conversation.phoneNumber,
+      // Create a Task (Activity) in Salesforce instead of a Case
+      const taskData = {
+        Subject: `SMS Conversation with ${conversation.phone_number}`,
+        Description: this.formatConversationForSalesforce(conversation, messages),
+        Status: 'Completed', // SMS conversation is already completed
+        Priority: 'Normal',
+        ActivityDate: new Date().toISOString().split('T')[0], // Today's date
+        Type: 'SMS',
+        Phone: conversation.phone_number,
         // Add custom fields if they exist in your org
         // Custom_Field__c: 'Custom Value'
       };
 
-      const caseResult = await this.conn.sobject('Case').create(caseData);
+      const taskResult = await this.conn.sobject('Task').create(taskData);
 
-      if (caseResult.success) {
-        console.log(`📋 Case created successfully: ${caseResult.id}`);
+      if (taskResult.success) {
+        console.log(`📋 Task created successfully: ${taskResult.id}`);
         
         // Optionally create a custom object record for the SMS conversation
         try {
           const smsRecord = {
-            Case__c: caseResult.id,
-            Phone_Number__c: conversation.phoneNumber,
+            Task__c: taskResult.id,
+            Phone_Number__c: conversation.phone_number,
             Conversation_Start__c: conversation.created_at,
             Conversation_End__c: conversation.updated_at,
-            Message_Count__c: conversation.messages.length,
+            Message_Count__c: messages ? messages.length : conversation.messages.length,
             Logged_From__c: 'Slack App',
             Thread_Channel__c: conversation.slack_channel_id,
             Thread_Timestamp__c: conversation.slack_thread_ts
@@ -135,13 +136,13 @@ class SalesforceHandler {
 
         return {
           success: true,
-          caseId: caseResult.id,
-          caseNumber: caseResult.id
+          caseId: taskResult.id, // Keep same return structure for compatibility
+          caseNumber: taskResult.id
         };
       } else {
         return {
           success: false,
-          error: caseResult.errors[0].message
+          error: taskResult.errors[0].message
         };
       }
     } catch (error) {
@@ -153,11 +154,18 @@ class SalesforceHandler {
     }
   }
 
-  formatConversationForSalesforce(conversation) {
-    let description = `SMS Conversation with ${conversation.phoneNumber}\n\n`;
+  // Legacy method for backward compatibility
+  async logConversation(conversation) {
+    return this.logConversationAsCase(conversation, conversation.messages);
+  }
+
+  formatConversationForSalesforce(conversation, messages = null) {
+    const messageList = messages || conversation.messages;
+    let description = `📱 SMS Conversation Log\n\n`;
+    description += `Phone Number: ${conversation.phone_number}\n`;
     description += `Conversation started: ${new Date(conversation.created_at).toLocaleString()}\n`;
     description += `Last updated: ${new Date(conversation.updated_at).toLocaleString()}\n`;
-    description += `Total messages: ${conversation.messages.length}\n`;
+    description += `Total messages: ${messageList.length}\n`;
     
     if (conversation.slack_channel_id && conversation.slack_thread_ts) {
       description += `Slack Thread: ${conversation.slack_channel_id} (${conversation.slack_thread_ts})\n`;
@@ -166,7 +174,7 @@ class SalesforceHandler {
     description += `\nMessages:\n`;
     description += '='.repeat(50) + '\n\n';
 
-    conversation.messages.forEach((message, index) => {
+    messageList.forEach((message, index) => {
       const timestamp = new Date(message.timestamp).toLocaleString();
       const direction = message.direction === 'incoming' ? 'FROM CUSTOMER' : 'TO CUSTOMER';
       

@@ -284,7 +284,7 @@ app.event('app_home_opened', async ({ event, client }) => {
             type: 'button',
             text: {
               type: 'plain_text',
-              text: 'Log to Salesforce'
+              text: 'Log to Salesforce (Task)'
             },
             action_id: 'log_to_salesforce',
             value: conv.id
@@ -571,7 +571,7 @@ app.view('phone_number_modal', async ({ ack, body, client, view }) => {
   }
 });
 
-// Handle "Log to Salesforce" button
+// Handle "Log to Salesforce (Task)" button
 app.action('log_to_salesforce', async ({ ack, body, client }) => {
   await ack();
   
@@ -592,7 +592,7 @@ app.action('log_to_salesforce', async ({ ack, body, client }) => {
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `This conversation has already been logged to Salesforce as Case ${conversation.salesforce_case_id}.`
+        text: `This conversation has already been logged to Salesforce as Task ${conversation.salesforce_case_id}.`
       });
       return;
     }
@@ -601,7 +601,7 @@ app.action('log_to_salesforce', async ({ ack, body, client }) => {
     const messages = await database.getConversationMessages(conversationId);
     
     // Create Salesforce case
-    const caseResult = await salesforceHandler.logConversationAsCase(conversation, messages);
+    const caseResult = await salesforceHandler.logConversationAsTask(conversation, messages);
     
     if (caseResult.success) {
       // Mark conversation as logged
@@ -610,7 +610,7 @@ app.action('log_to_salesforce', async ({ ack, body, client }) => {
       await client.chat.postEphemeral({
         channel: body.user.id,
         user: body.user.id,
-        text: `✅ Conversation logged to Salesforce as Case ${caseResult.caseId}.`
+        text: `✅ Conversation logged to Salesforce as Task ${caseResult.caseId}.`
       });
     } else {
       await client.chat.postEphemeral({
