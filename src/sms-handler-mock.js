@@ -1,5 +1,5 @@
-// Mock SMS Handler for testing without Twilio
-// This simulates SMS functionality for development and testing
+const moment = require('moment');
+const { v4: uuidv4 } = require('uuid');
 
 class MockSMSHandler {
   constructor() {
@@ -8,7 +8,7 @@ class MockSMSHandler {
     console.log('📱 Mock SMS Handler initialized (no Twilio account required)');
   }
 
-  async sendSMS(to, message) {
+  async sendSMS(to, message, fromNumber = null) {
     try {
       // Validate phone number
       if (!this.validatePhoneNumber(to)) {
@@ -20,26 +20,27 @@ class MockSMSHandler {
 
       // Format phone number
       const formattedNumber = this.formatPhoneNumber(to);
+      const from = fromNumber ? this.formatPhoneNumber(fromNumber) : '+1234567890';
 
       // Simulate SMS sending
-      const messageId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const messageId = `mock_${Date.now()}_${uuidv4().substring(0, 8)}`;
       
       // Store the sent message
       this.sentMessages.push({
         id: messageId,
         to: formattedNumber,
+        from: from,
         message: message,
         timestamp: new Date().toISOString(),
         status: 'sent'
       });
 
-      console.log(`📤 Mock SMS sent: ${formattedNumber} - "${message}"`);
+      console.log(`📤 Mock SMS sent: ${from} → ${formattedNumber} - "${message}"`);
 
       return {
         success: true,
         messageId: messageId,
-        status: 'sent',
-        to: formattedNumber
+        status: 'sent'
       };
     } catch (error) {
       console.error('Error sending mock SMS:', error);
@@ -50,28 +51,26 @@ class MockSMSHandler {
     }
   }
 
-  async getMessageStatus(messageId) {
+  async receiveSMS(from, body) {
     try {
-      const message = this.sentMessages.find(msg => msg.id === messageId);
-      if (!message) {
-        return {
-          success: false,
-          error: 'Message not found'
-        };
-      }
+      const messageId = `mock_incoming_${Date.now()}_${uuidv4().substring(0, 8)}`;
+      
+      // Store the received message
+      this.receivedMessages.push({
+        id: messageId,
+        from: from,
+        body: body,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`📨 Mock SMS received: ${from} - "${body}"`);
 
       return {
         success: true,
-        status: message.status,
-        errorCode: null,
-        errorMessage: null,
-        direction: 'outbound',
-        from: '+1234567890', // Mock from number
-        to: message.to,
-        body: message.message
+        messageId: messageId
       };
     } catch (error) {
-      console.error('Error getting mock message status:', error);
+      console.error('Error receiving mock SMS:', error);
       return {
         success: false,
         error: error.message
@@ -80,97 +79,74 @@ class MockSMSHandler {
   }
 
   validatePhoneNumber(phoneNumber) {
-    // Remove all non-digit characters except +
-    const cleaned = phoneNumber.replace(/[^\d+]/g, '');
-    
-    // Check if it's a valid phone number format
+    // Basic phone number validation
     const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-    return phoneRegex.test(cleaned);
+    return phoneRegex.test(phoneNumber.replace(/\s/g, ''));
   }
 
   formatPhoneNumber(phoneNumber) {
-    // Remove all non-digit characters
-    const cleaned = phoneNumber.replace(/\D/g, '');
+    // Remove all non-digit characters except +
+    let formatted = phoneNumber.replace(/[^\d+]/g, '');
     
-    // Add +1 if it's a 10-digit US number
-    if (cleaned.length === 10) {
-      return `+1${cleaned}`;
+    // If it doesn't start with +, add +1 for US numbers
+    if (!formatted.startsWith('+')) {
+      if (formatted.length === 10) {
+        formatted = '+1' + formatted;
+      } else if (formatted.length === 11 && formatted.startsWith('1')) {
+        formatted = '+' + formatted;
+      }
     }
     
-    // Add + if it's missing
-    if (cleaned.length === 11 && cleaned.startsWith('1')) {
-      return `+${cleaned}`;
-    }
-    
-    // Return as-is if it already has country code
-    if (phoneNumber.startsWith('+')) {
-      return phoneNumber;
-    }
-    
-    return `+${cleaned}`;
+    return formatted;
   }
 
   async getAccountInfo() {
     return {
-      success: true,
-      account: {
-        sid: 'mock_account_sid',
-        friendlyName: 'Mock Twilio Account',
-        status: 'active'
-      }
+      sid: 'mock_account_sid',
+      friendlyName: 'Mock Twilio Account',
+      status: 'active'
     };
   }
 
   async getPhoneNumbers() {
-    return {
-      success: true,
-      phoneNumbers: [{
-        sid: 'mock_phone_sid',
+    return [
+      {
+        sid: 'mock_phone_sid_1',
         phoneNumber: '+1234567890',
-        friendlyName: 'Mock SMS Number',
-        capabilities: {
-          sms: true,
-          voice: false
-        }
-      }]
-    };
+        friendlyName: 'Mock Phone Number 1'
+      },
+      {
+        sid: 'mock_phone_sid_2',
+        phoneNumber: '+1987654321',
+        friendlyName: 'Mock Phone Number 2'
+      }
+    ];
   }
 
-  // Mock method to simulate receiving an SMS
-  async simulateIncomingSMS(from, message) {
-    const messageId = `mock_incoming_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    this.receivedMessages.push({
-      id: messageId,
-      from: from,
-      message: message,
-      timestamp: new Date().toISOString()
-    });
-
-    console.log(`📨 Mock SMS received: ${from} - "${message}"`);
-    
-    return {
-      success: true,
-      messageId: messageId,
-      from: from,
-      message: message
-    };
-  }
-
-  // Get all sent messages (for testing)
+  // Get all sent messages
   getSentMessages() {
     return this.sentMessages;
   }
 
-  // Get all received messages (for testing)
+  // Get all received messages
   getReceivedMessages() {
     return this.receivedMessages;
   }
 
-  // Clear all messages (for testing)
+  // Clear all messages (useful for testing)
   clearMessages() {
     this.sentMessages = [];
     this.receivedMessages = [];
+    console.log('📱 Mock SMS messages cleared');
+  }
+
+  // Get message statistics
+  getStats() {
+    return {
+      sent: this.sentMessages.length,
+      received: this.receivedMessages.length,
+      total: this.sentMessages.length + this.receivedMessages.length
+    };
   }
 }
 

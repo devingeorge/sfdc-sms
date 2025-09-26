@@ -9,7 +9,7 @@ class SMSHandler {
     this.fromNumber = process.env.TWILIO_PHONE_NUMBER;
   }
 
-  async sendSMS(to, message) {
+  async sendSMS(to, message, fromNumber = null) {
     try {
       // Validate phone number
       if (!this.validatePhoneNumber(to)) {
@@ -21,20 +21,21 @@ class SMSHandler {
 
       // Format phone number
       const formattedNumber = this.formatPhoneNumber(to);
+      
+      // Use provided fromNumber or default
+      const from = fromNumber ? this.formatPhoneNumber(fromNumber) : this.fromNumber;
 
       const result = await this.client.messages.create({
         body: message,
-        from: this.fromNumber,
+        from: from,
         to: formattedNumber
       });
 
-      console.log(`SMS sent successfully: ${result.sid} to ${formattedNumber}`);
-
+      console.log(`SMS sent successfully: ${result.sid}`);
       return {
         success: true,
         messageId: result.sid,
-        status: result.status,
-        to: formattedNumber
+        status: result.status
       };
     } catch (error) {
       console.error('Error sending SMS:', error);
@@ -45,21 +46,16 @@ class SMSHandler {
     }
   }
 
-  async getMessageStatus(messageId) {
+  async receiveSMS(from, body) {
     try {
-      const message = await this.client.messages(messageId).fetch();
+      console.log(`SMS received from ${from}: ${body}`);
       return {
         success: true,
-        status: message.status,
-        errorCode: message.errorCode,
-        errorMessage: message.errorMessage,
-        direction: message.direction,
-        from: message.from,
-        to: message.to,
-        body: message.body
+        from: from,
+        body: body
       };
     } catch (error) {
-      console.error('Error getting message status:', error);
+      console.error('Error receiving SMS:', error);
       return {
         success: false,
         error: error.message
@@ -68,74 +64,52 @@ class SMSHandler {
   }
 
   validatePhoneNumber(phoneNumber) {
-    // Remove all non-digit characters except +
-    const cleaned = phoneNumber.replace(/[^\d+]/g, '');
-    
-    // Check if it's a valid phone number format
+    // Basic phone number validation
     const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-    return phoneRegex.test(cleaned);
+    return phoneRegex.test(phoneNumber.replace(/\s/g, ''));
   }
 
   formatPhoneNumber(phoneNumber) {
-    // Remove all non-digit characters
-    const cleaned = phoneNumber.replace(/\D/g, '');
+    // Remove all non-digit characters except +
+    let formatted = phoneNumber.replace(/[^\d+]/g, '');
     
-    // Add +1 if it's a 10-digit US number
-    if (cleaned.length === 10) {
-      return `+1${cleaned}`;
+    // If it doesn't start with +, add +1 for US numbers
+    if (!formatted.startsWith('+')) {
+      if (formatted.length === 10) {
+        formatted = '+1' + formatted;
+      } else if (formatted.length === 11 && formatted.startsWith('1')) {
+        formatted = '+' + formatted;
+      }
     }
     
-    // Add + if it's missing
-    if (cleaned.length === 11 && cleaned.startsWith('1')) {
-      return `+${cleaned}`;
-    }
-    
-    // Return as-is if it already has country code
-    if (phoneNumber.startsWith('+')) {
-      return phoneNumber;
-    }
-    
-    return `+${cleaned}`;
+    return formatted;
   }
 
   async getAccountInfo() {
     try {
       const account = await this.client.api.accounts(this.client.accountSid).fetch();
       return {
-        success: true,
-        account: {
-          sid: account.sid,
-          friendlyName: account.friendlyName,
-          status: account.status
-        }
+        sid: account.sid,
+        friendlyName: account.friendlyName,
+        status: account.status
       };
     } catch (error) {
-      console.error('Error getting Twilio account info:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      console.error('Error getting account info:', error);
+      return null;
     }
   }
 
   async getPhoneNumbers() {
     try {
       const phoneNumbers = await this.client.incomingPhoneNumbers.list();
-      return {
-        success: true,
-        phoneNumbers: phoneNumbers.map(number => ({
-          sid: number.sid,
-          phoneNumber: number.phoneNumber,
-          friendlyName: number.friendlyName,
-          capabilities: number.capabilities
-        }))
-      };
+      return phoneNumbers.map(number => ({
+        sid: number.sid,
+        phoneNumber: number.phoneNumber,
+        friendlyName: number.friendlyName
+      }));
     } catch (error) {
-      console.error('Error getting Twilio phone numbers:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+      console.error('Error getting phone numbers:', error);
+      return [];
     }
   }
 }

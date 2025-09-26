@@ -67,6 +67,15 @@ class Database {
         )
       `;
 
+      const createUserPhoneNumbersTable = `
+        CREATE TABLE IF NOT EXISTS user_phone_numbers (
+          slack_user_id TEXT PRIMARY KEY,
+          phone_number TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+
       // Create tables sequentially to ensure they're ready
       this.db.run(createConversationsTable, (err) => {
         if (err) {
@@ -83,12 +92,70 @@ class Database {
             return;
           }
           console.log('✅ Messages table created');
-          resolve();
+          
+          this.db.run(createUserPhoneNumbersTable, (err) => {
+            if (err) {
+              console.error('Error creating user_phone_numbers table:', err);
+              reject(err);
+              return;
+            }
+            console.log('✅ User phone numbers table created');
+            resolve();
+          });
         });
       });
     });
   }
 
+  // User Phone Number Methods
+  async setUserPhoneNumber(slackUserId, phoneNumber) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT OR REPLACE INTO user_phone_numbers (slack_user_id, phone_number, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)',
+        [slackUserId, phoneNumber],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve({ slack_user_id: slackUserId, phone_number: phoneNumber });
+          }
+        }
+      );
+    });
+  }
+
+  async getUserPhoneNumber(slackUserId) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM user_phone_numbers WHERE slack_user_id = ?',
+        [slackUserId],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
+        }
+      );
+    });
+  }
+
+  async getAllUserPhoneNumbers() {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM user_phone_numbers ORDER BY updated_at DESC',
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        }
+      );
+    });
+  }
+
+  // Conversation Methods
   async getOrCreateConversation(phoneNumber) {
     return new Promise((resolve, reject) => {
       this.db.get(
@@ -97,21 +164,8 @@ class Database {
         (err, row) => {
           if (err) {
             reject(err);
-            return;
-          }
-
-          if (row) {
-            resolve({
-              id: row.id,
-              phoneNumber: row.phone_number,
-              created_at: row.created_at,
-              updated_at: row.updated_at,
-              logged_to_salesforce: row.logged_to_salesforce,
-              salesforce_case_id: row.salesforce_case_id,
-              slack_channel_id: row.slack_channel_id,
-              slack_thread_ts: row.slack_thread_ts,
-              conversation_mode: row.conversation_mode
-            });
+          } else if (row) {
+            resolve(row);
           } else {
             const conversationId = uuidv4();
             this.db.run(
@@ -120,21 +174,63 @@ class Database {
               function(err) {
                 if (err) {
                   reject(err);
-                  return;
+                } else {
+                  resolve({ id: conversationId, phone_number: phoneNumber });
                 }
-                resolve({
-                  id: conversationId,
-                  phoneNumber: phoneNumber,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                  logged_to_salesforce: false,
-                  salesforce_case_id: null,
-                  slack_channel_id: null,
-                  slack_thread_ts: null,
-                  conversation_mode: 'threads'
-                });
               }
             );
+          }
+        }
+      );
+    });
+  }
+
+  async getConversation(conversationId) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM conversations WHERE id = ?',
+        [conversationId],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row);
+          }
+        }
+      );
+    });
+  }
+
+  async getRecentConversations(limit = 10) {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM conversations ORDER BY updated_at DESC LIMIT ?',
+        [limit],
+        async (err, conversations) => {
+          if (err) {
+            reject(err);
+          } else {
+            // Get messages for each conversation
+            for (let conv of conversations) {
+              conv.messages = await this.getConversationMessages(conv.id);
+            }
+            resolve(conversations);
+          }
+        }
+      );
+    });
+  }
+
+  async getConversationMessages(conversationId) {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC',
+        [conversationId],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
           }
         }
       );
@@ -168,91 +264,19 @@ class Database {
     });
   }
 
-  async getRecentConversations(limit = 10) {
+  async updateConversationSlackInfo(conversationId, channelId, threadTs) {
     return new Promise((resolve, reject) => {
-      const query = `
-        SELECT c.*, 
-               json_group_array(
-                 json_object(
-                   'id', m.id,
-                   'content', m.content,
-                   'direction', m.direction,
-                   'timestamp', m.timestamp
-                 )
-               ) as messages
-        FROM conversations c
-        LEFT JOIN messages m ON c.id = m.conversation_id
-        GROUP BY c.id
-        ORDER BY c.updated_at DESC
-        LIMIT ?
-      `;
-
-      this.db.all(query, [limit], (err, rows) => {
-        if (err) {
-          reject(err);
-          return;
+      this.db.run(
+        'UPDATE conversations SET slack_channel_id = ?, slack_thread_ts = ? WHERE id = ?',
+        [channelId, threadTs, conversationId],
+        function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve({ id: conversationId, slack_channel_id: channelId, slack_thread_ts: threadTs });
+          }
         }
-
-        const conversations = rows.map(row => ({
-          id: row.id,
-          phoneNumber: row.phone_number,
-          created_at: row.created_at,
-          updated_at: row.updated_at,
-          logged_to_salesforce: row.logged_to_salesforce,
-          salesforce_case_id: row.salesforce_case_id,
-          slack_channel_id: row.slack_channel_id,
-          slack_thread_ts: row.slack_thread_ts,
-          conversation_mode: row.conversation_mode,
-          messages: JSON.parse(row.messages).filter(msg => msg.id !== null)
-        }));
-
-        resolve(conversations);
-      });
-    });
-  }
-
-  async getConversation(conversationId) {
-    return new Promise((resolve, reject) => {
-      const query = `
-        SELECT c.*, 
-               json_group_array(
-                 json_object(
-                   'id', m.id,
-                   'content', m.content,
-                   'direction', m.direction,
-                   'timestamp', m.timestamp
-                 )
-               ) as messages
-        FROM conversations c
-        LEFT JOIN messages m ON c.id = m.conversation_id
-        WHERE c.id = ?
-        GROUP BY c.id
-      `;
-
-      this.db.get(query, [conversationId], (err, row) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        if (!row) {
-          resolve(null);
-          return;
-        }
-
-        resolve({
-          id: row.id,
-          phoneNumber: row.phone_number,
-          created_at: row.created_at,
-          updated_at: row.updated_at,
-          logged_to_salesforce: row.logged_to_salesforce,
-          salesforce_case_id: row.salesforce_case_id,
-          slack_channel_id: row.slack_channel_id,
-          slack_thread_ts: row.slack_thread_ts,
-          conversation_mode: row.conversation_mode,
-          messages: JSON.parse(row.messages).filter(msg => msg.id !== null)
-        });
-      });
+      );
     });
   }
 
@@ -265,56 +289,23 @@ class Database {
           if (err) {
             reject(err);
           } else {
-            resolve();
+            resolve({ id: conversationId, salesforce_case_id: salesforceCaseId });
           }
         }
       );
     });
   }
 
-  async updateConversationSlackInfo(conversationId, channelId, threadTs = null) {
+  async getConversationThreads() {
     return new Promise((resolve, reject) => {
-      this.db.run(
-        'UPDATE conversations SET slack_channel_id = ?, slack_thread_ts = ? WHERE id = ?',
-        [channelId, threadTs, conversationId],
-        function(err) {
+      this.db.all(
+        'SELECT id, slack_channel_id, slack_thread_ts FROM conversations WHERE slack_channel_id IS NOT NULL AND slack_thread_ts IS NOT NULL',
+        (err, rows) => {
           if (err) {
             reject(err);
           } else {
-            resolve();
+            resolve(rows);
           }
-        }
-      );
-    });
-  }
-
-  async getConversationByThread(channelId, threadTs) {
-    return new Promise((resolve, reject) => {
-      this.db.get(
-        'SELECT * FROM conversations WHERE slack_channel_id = ? AND slack_thread_ts = ?',
-        [channelId, threadTs],
-        (err, row) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-
-          if (!row) {
-            resolve(null);
-            return;
-          }
-
-          resolve({
-            id: row.id,
-            phoneNumber: row.phone_number,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            logged_to_salesforce: row.logged_to_salesforce,
-            salesforce_case_id: row.salesforce_case_id,
-            slack_channel_id: row.slack_channel_id,
-            slack_thread_ts: row.slack_thread_ts,
-            conversation_mode: row.conversation_mode
-          });
         }
       );
     });
