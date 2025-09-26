@@ -333,8 +333,8 @@ app.command('/sms', async ({ ack, body, client, respond }) => {
   }
 });
 
-// Add webhook endpoints directly to the Bolt app
-app.receiver.router.post('/webhook/sms/sms', async (req, res) => {
+// Add HTTP endpoints using Bolt's built-in HTTP endpoint feature
+app.http.post('/webhook/sms/sms', async (req, res) => {
   try {
     const { From, To, Body, MessageSid, MessageStatus } = req.body;
     
@@ -361,7 +361,7 @@ app.receiver.router.post('/webhook/sms/sms', async (req, res) => {
 });
 
 // Health check endpoint
-app.receiver.router.get('/webhook/sms/health', (req, res) => {
+app.http.get('/webhook/sms/health', async (req, res) => {
   res.json({ status: 'ok', message: 'SMS webhook server is running' });
 });
 
