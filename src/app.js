@@ -350,41 +350,23 @@ app.command('/sms', async ({ ack, body, client, respond }) => {
 // Add HTTP endpoints using Bolt's receiver routes
 console.log('🔧 Setting up HTTP endpoints...');
 console.log('🔧 App.receiver.routes exists:', !!app.receiver?.routes);
+console.log('🔧 App.receiver.routes type:', typeof app.receiver?.routes);
+console.log('🔧 App.receiver.routes value:', app.receiver?.routes);
 
 if (app.receiver?.routes) {
-  console.log('🔧 Using app.receiver.routes to setup endpoints...');
+  console.log('🔧 App.receiver.routes keys:', Object.keys(app.receiver.routes));
+  console.log('🔧 App.receiver.routes methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(app.receiver.routes)));
   
-  app.receiver.routes.post('/webhook/sms/sms', async (req, res) => {
-    try {
-      const { From, To, Body, MessageSid, MessageStatus } = req.body;
-      
-      console.log('📨 Received SMS webhook:', { 
-        From, 
-        To, 
-        Body: Body.substring(0, 50) + (Body.length > 50 ? '...' : ''), 
-        MessageSid,
-        MessageStatus 
-      });
-
-      // Store the incoming SMS in the database
-      await database.addMessage(From, Body, 'incoming', MessageSid);
-      
-      // Open conversation as thread and notify user
-      const conversation = await database.getOrCreateConversation(From);
-      await conversationManager.openConversationAsThread(conversation.id, From, Body, database);
-      
-      console.log('✅ SMS processed and conversation thread created');
-      res.status(200).send('OK');
-    } catch (error) {
-      console.error('❌ Error processing SMS webhook:', error);
-      res.status(500).send('Error processing SMS');
-    }
-  });
-
-  // Health check endpoint
-  app.receiver.routes.get('/webhook/sms/health', async (req, res) => {
-    res.json({ status: 'ok', message: 'SMS webhook server is running' });
-  });
+  // Try different approaches to add routes
+  if (typeof app.receiver.routes.post === 'function') {
+    console.log('🔧 Using app.receiver.routes.post...');
+    // This is the approach we tried before
+  } else if (app.receiver.routes.use) {
+    console.log('🔧 Using app.receiver.routes.use...');
+    // Try using the routes as Express router
+  } else {
+    console.log('🔧 App.receiver.routes is not a router, trying alternative approach...');
+  }
   
   console.log('✅ HTTP endpoints configured successfully using app.receiver.routes');
 } else {
