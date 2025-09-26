@@ -373,16 +373,14 @@ if (app.receiver?.routes) {
   console.log('❌ App.receiver.routes is undefined, cannot setup HTTP endpoints');
 }
 
-// Use the existing routes from routes.js
-// Since app.receiver.routes is not a router, we need to use a different approach
-// Let's try using the receiver's requestListener to handle our routes
+// Handle SMS webhooks directly in the requestListener
 if (app.receiver && app.receiver.requestListener) {
-  console.log('🔧 Setting up routes using receiver.requestListener...');
+  console.log('🔧 Setting up SMS webhook handler using receiver.requestListener...');
   
   // Store the original requestListener
   const originalRequestListener = app.receiver.requestListener;
   
-  // Override the requestListener to handle our routes
+  // Override the requestListener to handle SMS webhooks directly
   app.receiver.requestListener = (req, res) => {
     console.log('🔍 Incoming request:', {
       method: req.method,
@@ -390,38 +388,93 @@ if (app.receiver && app.receiver.requestListener) {
       path: req.path
     });
     
-    // Check if this is one of our webhook routes
-    if (req.url.startsWith('/webhook/sms/')) {
-      console.log('🔧 Handling SMS webhook route:', req.url);
+    // Check if this is an SMS webhook
+    if (req.url === '/webhook/sms/sms' && req.method === 'POST') {
+      console.log('🔧 Handling SMS webhook directly...');
       
-      // Add a flag to track if we handled the request
-      let handled = false;
-      
-      // Override res.end to track when response is sent
-      const originalEnd = res.end;
-      res.end = function(...args) {
-        handled = true;
-        console.log('✅ SMS webhook response sent');
-        return originalEnd.apply(this, args);
-      };
-      
-      // Use the routes from routes.js
-      routes.smsWebhook(req, res, () => {
-        // If our routes don't handle it, call the original listener
-        if (!handled) {
-          console.log('🔧 SMS route did not handle request, falling back to original listener');
-          originalRequestListener(req, res);
-        }
-      });
+      // Handle SMS webhook directly
+      handleSMSWebhook(req, res);
+    } else if (req.url === '/webhook/sms/test' && req.method === 'GET') {
+      console.log('🔧 Handling test endpoint...');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', message: 'SMS webhook routes are working!' }));
     } else {
       // For all other requests, use the original listener
       originalRequestListener(req, res);
     }
   };
   
-  console.log('✅ Routes configured using receiver.requestListener');
+  console.log('✅ SMS webhook handler configured using receiver.requestListener');
 } else {
-  console.log('❌ Cannot setup routes - receiver.requestListener not available');
+  console.log('❌ Cannot setup SMS webhook handler - receiver.requestListener not available');
+}
+
+// Direct SMS webhook handler
+async function handleSMSWebhook(req, res) {
+  try {
+    console.log('📨 SMS webhook received!');
+    
+    // Parse the request body
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    
+    req.on('end', async () => {
+      try {
+        // Parse form data (Twilio sends form-encoded data)
+        const params = new URLSearchParams(body);
+        const smsData = {
+          From: params.get('From'),
+          To: params.get('To'),
+          Body: params.get('Body'),
+          MessageSid: params.get('MessageSid'),
+          MessageStatus: params.get('MessageStatus')
+        };
+        
+        console.log('📨 Parsed SMS data:', { 
+          From: smsData.From, 
+          To: smsData.To, 
+          Body: smsData.Body ? smsData.Body.substring(0, 50) + (smsData.Body.length > 50 ? '...' : '') : 'No body', 
+          MessageSid: smsData.MessageSid, 
+          MessageStatus: smsData.MessageStatus 
+        });
+
+        if (!smsData.From || !smsData.Body) {
+          console.log('❌ Missing required SMS data (From or Body)');
+          res.writeHead(400, { 'Content-Type': 'text/plain' });
+          res.end('Missing required data');
+          return;
+        }
+
+        // Store the incoming message
+        console.log('💾 Storing SMS in database...');
+        await database.addMessage(smsData.From, smsData.Body, 'incoming', smsData.MessageSid);
+        console.log('✅ SMS stored in database');
+
+        // Get the conversation to update Slack display
+        console.log('💬 Getting/creating conversation...');
+        const conversation = await database.getOrCreateConversation(smsData.From);
+        console.log('✅ Conversation ready:', conversation.id);
+        
+        // Open conversation as thread and notify user
+        await conversationManager.openConversationAsThread(conversation.id, smsData.From, smsData.Body, database);
+        console.log('✅ Conversation thread created in Slack');
+
+        console.log('✅ SMS webhook processed successfully');
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('OK');
+      } catch (error) {
+        console.error('❌ Error processing SMS webhook:', error);
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Error processing SMS');
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error handling SMS webhook:', error);
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end('Error processing SMS');
+  }
 }
 
 // Start the app
