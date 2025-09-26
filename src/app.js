@@ -334,7 +334,8 @@ app.command('/sms', async ({ ack, body, client, respond }) => {
 });
 
 // Webhook endpoint for receiving SMS
-app.use('/webhook/sms', routes.smsWebhook);
+// Use the Express receiver to handle custom routes
+app.receiver.router.use('/webhook/sms', routes.smsWebhook);
 
 // Start the app
 (async () => {
