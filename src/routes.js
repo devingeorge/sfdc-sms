@@ -22,29 +22,46 @@ try {
 // Twilio webhook for incoming SMS
 router.post('/sms', async (req, res) => {
   try {
+    console.log('📨 SMS webhook received!');
+    console.log('📨 Request headers:', req.headers);
+    console.log('📨 Request body:', req.body);
+    console.log('📨 Request method:', req.method);
+    console.log('📨 Request URL:', req.url);
+    
     const { From, To, Body, MessageSid, MessageStatus } = req.body;
     
-    console.log('Received SMS webhook:', { 
+    console.log('📨 Parsed SMS data:', { 
       From, 
       To, 
-      Body: Body.substring(0, 50) + (Body.length > 50 ? '...' : ''), 
+      Body: Body ? Body.substring(0, 50) + (Body.length > 50 ? '...' : '') : 'No body', 
       MessageSid, 
       MessageStatus 
     });
 
+    if (!From || !Body) {
+      console.log('❌ Missing required SMS data (From or Body)');
+      res.status(400).send('Missing required data');
+      return;
+    }
+
     // Store the incoming message
+    console.log('💾 Storing SMS in database...');
     await database.addMessage(From, Body, 'incoming', MessageSid);
+    console.log('✅ SMS stored in database');
 
     // Get the conversation to update Slack display
+    console.log('💬 Getting/creating conversation...');
     const conversation = await database.getOrCreateConversation(From);
+    console.log('✅ Conversation ready:', conversation.id);
     
     // Update conversation display in Slack if it's open
     // This requires the ConversationManager to be accessible
     // We'll need to pass it from the main app
     
+    console.log('✅ SMS webhook processed successfully');
     res.status(200).send('OK');
   } catch (error) {
-    console.error('Error processing incoming SMS:', error);
+    console.error('❌ Error processing incoming SMS:', error);
     res.status(500).send('Error processing SMS');
   }
 });

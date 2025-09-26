@@ -373,6 +373,18 @@ if (app.receiver?.routes) {
   console.log('❌ App.receiver.routes is undefined, cannot setup HTTP endpoints');
 }
 
+// Add catch-all handler to see what requests are coming in
+app.receiver.router.use('*', (req, res, next) => {
+  console.log('🔍 Incoming request:', {
+    method: req.method,
+    url: req.url,
+    path: req.path,
+    headers: req.headers,
+    body: req.body
+  });
+  next();
+});
+
 // Start the app
 (async () => {
   try {
